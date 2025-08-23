@@ -184,7 +184,8 @@ class HuggingFaceConverter:
                                         )
                                     ]
                                 )
-                                yield f"data: {stream_response.model_dump_json()}\n\n"
+                                chunk_data = f"data: {stream_response.model_dump_json()}\n\n"
+                                yield chunk_data
                                 thinking_sent = True
                             
                             # 重置thinking状态
@@ -206,7 +207,8 @@ class HuggingFaceConverter:
                                         )
                                     ]
                                 )
-                                yield f"data: {stream_response.model_dump_json()}\n\n"
+                                chunk_data = f"data: {stream_response.model_dump_json()}\n\n"
+                                yield chunk_data
                             continue
                         
                         # 如果还没遇到</think>且没有发送过thinking，认为是thinking内容
@@ -234,7 +236,8 @@ class HuggingFaceConverter:
                                 )
                             ]
                         )
-                        yield f"data: {stream_response.model_dump_json()}\n\n"
+                        chunk_data = f"data: {stream_response.model_dump_json()}\n\n"
+                        yield chunk_data
                 
                 # 检查是否结束 - 改进结束检测逻辑
                 if chunk.choices and chunk.choices[0].finish_reason is not None:
@@ -251,7 +254,8 @@ class HuggingFaceConverter:
                             )
                         ]
                     )
-                    yield f"data: {final_response.model_dump_json()}\n\n"
+                    chunk_data = f"data: {final_response.model_dump_json()}\n\n"
+                    yield chunk_data
                     # 立即发送[DONE]标记
                     yield "data: [DONE]\n\n"
                     return  # 使用return而不是break确保函数完全结束

@@ -129,16 +129,31 @@ async def create_chat_completion(request: ChatCompletionRequest, http_request: R
         if request.stream:
             # 流式响应
             async def generate():
-                async for chunk in converter.create_chat_completion_stream(request, client_api_key):
-                    yield chunk
+                try:
+                    async for chunk in converter.create_chat_completion_stream(request, client_api_key):
+                        yield chunk
+                        # 在Vercel环境下确保立即刷新
+                        import asyncio
+                        await asyncio.sleep(0)  # 让出控制权，确保数据被发送
+                except Exception as e:
+                    logger.error(f"Streaming error: {e}")
+                    # 发送错误并结束流
+                    error_chunk = f'data: {{"error": {{"message": "{str(e)}", "type": "stream_error"}}}}\n\n'
+                    yield error_chunk
+                    yield "data: [DONE]\n\n"
             
             return StreamingResponse(
                 generate(),
-                media_type="text/plain",
+                media_type="text/event-stream",
                 headers={
-                    "Cache-Control": "no-cache",
+                    "Cache-Control": "no-cache, no-store, must-revalidate",
                     "Connection": "keep-alive",
-                    "Content-Type": "text/event-stream"
+                    "Content-Type": "text/event-stream",
+                    "X-Accel-Buffering": "no",  # 禁用nginx缓冲
+                    "X-Content-Type-Options": "nosniff",  # 防止MIME类型嗅探
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Headers": "*",
+                    "Transfer-Encoding": "chunked"  # 确保分块传输
                 }
             )
         else:
