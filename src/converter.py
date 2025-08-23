@@ -247,6 +247,20 @@ class HuggingFaceConverter:
                     yield f"data: {final_response.model_dump_json()}\n\n"
                     break
             
+            # 确保在流结束时发送finish_reason="stop"
+            final_response = ChatCompletionStreamResponse(
+                id=response_id,
+                created=created,
+                model=request.model,
+                choices=[
+                    StreamChoice(
+                        index=0,
+                        delta=Delta(),
+                        finish_reason="stop"
+                    )
+                ]
+            )
+            yield f"data: {final_response.model_dump_json()}\n\n"
             yield "data: [DONE]\n\n"
             
         except Exception as e:
