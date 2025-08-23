@@ -11,13 +11,5 @@
       "src": "/(.*)",
       "dest": "api_server.py"
     }
-  ],
-  "env": {
-    "HF_TOKEN": "@hf_token"
-  },
-  "functions": {
-    "api_server.py": {
-      "maxDuration": 30
-    }
-  }
+  ]
 }
