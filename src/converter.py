@@ -236,9 +236,9 @@ class HuggingFaceConverter:
                         )
                         yield f"data: {stream_response.model_dump_json()}\n\n"
                 
-                # 检查是否结束 - 改进结束检测逻辑
+                # 检查是否结束
                 if chunk.choices and chunk.choices[0].finish_reason is not None:
-                    # 发送结束标记 - 确保包含finish_reason的最终chunk
+                    # 发送包含finish_reason的最终chunk
                     final_response = ChatCompletionStreamResponse(
                         id=response_id,
                         created=created,
@@ -252,13 +252,9 @@ class HuggingFaceConverter:
                         ]
                     )
                     yield f"data: {final_response.model_dump_json()}\n\n"
-                    # 立即发送[DONE]标记
-                    yield "data: [DONE]\n\n"
-                    return  # 使用return而不是break确保函数完全结束
+                    break
             
-            # 如果循环正常结束但没有收到finish_reason，也要发送[DONE]
-            # 这种情况可能发生在某些模型或网络问题时
-            logger.warning("Stream ended without finish_reason, sending [DONE] anyway")
+            # 在循环结束后统一发送[DONE]标记
             yield "data: [DONE]\n\n"
             
         except Exception as e:
@@ -272,6 +268,8 @@ class HuggingFaceConverter:
                 }
             }
             yield f"data: {json.dumps(error_response)}\n\n"
+            # 确保在错误情况下也发送[DONE]标记
+            yield "data: [DONE]\n\n"
     
     def _convert_hf_response_to_openai(self, hf_response, model: str, request: ChatCompletionRequest) -> ChatCompletionResponse:
         """将Hugging Face响应转换为OpenAI格式"""
