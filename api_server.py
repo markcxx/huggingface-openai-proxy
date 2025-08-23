@@ -101,7 +101,7 @@ async def health_check():
 
 
 @app.post("/v1/chat/completions")
-async def create_chat_completion(request: ChatCompletionRequest):
+async def create_chat_completion(request: ChatCompletionRequest, http_request: Request):
     """创建聊天完成"""
     global converter
     
@@ -110,13 +110,26 @@ async def create_chat_completion(request: ChatCompletionRequest):
         logger.warning("Converter not initialized, initializing now...")
         converter = HuggingFaceConverter()
     
+    # 从请求头获取客户端的API Key
+    auth_header = http_request.headers.get("Authorization")
+    client_api_key = None
+    if auth_header and auth_header.startswith("Bearer "):
+        client_api_key = auth_header[7:]  # 移除"Bearer "前缀
+        logger.info(f"🔑 POST /v1/chat/completions - 使用客户端API Key: {client_api_key}")
+    else:
+        if config.hf_token:
+            logger.warning(f"🔑 POST /v1/chat/completions - 未找到客户端API Key，使用服务端默认Key: {config.hf_token}")
+        else:
+            logger.warning(f"🔑 POST /v1/chat/completions - 未找到客户端API Key，且无服务端默认Key，客户端必须提供有效的HF Token")
+        logger.info(f"🔑 POST /v1/chat/completions - Authorization头内容: {auth_header or 'None'}")
+    
     try:
         logger.info(f"Chat completion request - Model: {request.model}, Stream: {request.stream}")
         
         if request.stream:
             # 流式响应
             async def generate():
-                async for chunk in converter.create_chat_completion_stream(request):
+                async for chunk in converter.create_chat_completion_stream(request, client_api_key):
                     yield chunk
             
             return StreamingResponse(
@@ -130,7 +143,7 @@ async def create_chat_completion(request: ChatCompletionRequest):
             )
         else:
             # 非流式响应
-            response = await converter.create_chat_completion(request)
+            response = await converter.create_chat_completion(request, client_api_key)
             logger.info(f"Chat completion successful - Response ID: {response.id}")
             return response
             
@@ -149,7 +162,7 @@ async def create_chat_completion(request: ChatCompletionRequest):
 
 
 @app.get("/v1/models", response_model=ModelListResponse)
-async def list_models():
+async def list_models(http_request: Request):
     """获取可用模型列表"""
     global converter
     
@@ -158,9 +171,21 @@ async def list_models():
         logger.warning("Converter not initialized, initializing now...")
         converter = HuggingFaceConverter()
     
+    # 从请求头获取客户端的API Key
+    auth_header = http_request.headers.get("Authorization")
+    client_api_key = None
+    if auth_header and auth_header.startswith("Bearer "):
+        client_api_key = auth_header[7:]  # 移除"Bearer "前缀
+        logger.info(f"🔑 GET /v1/models - 使用客户端API Key: {client_api_key}")
+    else:
+        if config.hf_token:
+            logger.warning(f"🔑 GET /v1/models - 未找到客户端API Key，使用服务端默认Key: {config.hf_token}")
+        else:
+            logger.warning(f"🔑 GET /v1/models - 未找到客户端API Key，且无服务端默认Key，客户端必须提供有效的HF Token")
+    
     try:
         logger.info("Models list request")
-        models = await converter.get_models()
+        models = await converter.get_models(client_api_key)
         logger.info(f"Returned {len(models.data)} models")
         return models
         

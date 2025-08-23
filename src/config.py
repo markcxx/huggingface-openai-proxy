@@ -29,13 +29,13 @@ class Config:
         # 请求超时配置
         self.request_timeout: int = int(os.getenv("REQUEST_TIMEOUT", "300"))
         
-        # 验证必要的配置
-        self._validate_config()
+        # 不需要验证HF_TOKEN，因为支持客户端传递
+        # self._validate_config()
     
     def _validate_config(self):
         """验证配置"""
-        if not self.hf_token:
-            raise ValueError("HF_TOKEN environment variable is required")
+        # HF_TOKEN不再是必需的，支持客户端传递
+        pass
     
     @property
     def is_development(self) -> bool:

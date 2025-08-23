@@ -26,19 +26,27 @@ class HuggingFaceConverter:
     """Hugging Face API转换器"""
     
     def __init__(self):
-        self._client = None
+        """初始化转换器"""
+        self.config = config
     
-    @property
-    def client(self):
-        """懒加载OpenAI客户端"""
-        if self._client is None:
-            # 如果没有配置HF_TOKEN，使用默认值，让客户端自行配置
-            api_key = config.hf_token or "dummy-key"
-            self._client = OpenAI(
-                base_url=config.hf_base_url,
-                api_key=api_key,
-            )
-        return self._client
+    def get_client(self, api_key: str = None):
+        """获取OpenAI客户端，支持动态API Key"""
+        # 优先使用客户端传递的API Key
+        if api_key:
+            effective_api_key = api_key
+            logger.info(f"🔑 Using client API key: {api_key[:15]}...{api_key[-4:] if len(api_key) > 19 else ''}")
+        elif self.config.hf_token:
+            effective_api_key = self.config.hf_token
+            logger.info(f"🔑 Using server default API key: {effective_api_key[:15]}...{effective_api_key[-4:] if len(effective_api_key) > 19 else ''}")
+        else:
+            # 没有任何API Key时，使用占位符（客户端必须提供有效的key）
+            effective_api_key = "client-api-key-required"
+            logger.warning("🔑 No API key available - client must provide valid HF token")
+        
+        return OpenAI(
+            base_url=self.config.hf_base_url,
+            api_key=effective_api_key,
+        )
     
     def convert_messages_to_hf_format(self, messages: List[Message]) -> List[Dict[str, str]]:
         """将OpenAI消息格式转换为Hugging Face格式"""
@@ -83,15 +91,19 @@ class HuggingFaceConverter:
     
     async def create_chat_completion(
         self, 
-        request: ChatCompletionRequest
+        request: ChatCompletionRequest,
+        api_key: str = None
     ) -> ChatCompletionResponse:
         """创建聊天完成（非流式）"""
         try:
             # 转换消息格式
             hf_messages = self.convert_messages_to_hf_format(request.messages)
             
+            # 使用动态API Key获取客户端
+            client = self.get_client(api_key)
+            
             # 调用Hugging Face API
-            response = self.client.chat.completions.create(
+            response = client.chat.completions.create(
                 model=request.model,
                 messages=hf_messages,
                 temperature=request.temperature,
@@ -110,15 +122,19 @@ class HuggingFaceConverter:
     
     async def create_chat_completion_stream(
         self, 
-        request: ChatCompletionRequest
+        request: ChatCompletionRequest,
+        api_key: str = None
     ) -> AsyncGenerator[str, None]:
         """创建流式聊天完成"""
         try:
             # 转换消息格式
             hf_messages = self.convert_messages_to_hf_format(request.messages)
             
+            # 使用动态API Key获取客户端
+            client = self.get_client(api_key)
+            
             # 调用Hugging Face API（流式）
-            stream = self.client.chat.completions.create(
+            stream = client.chat.completions.create(
                 model=request.model,
                 messages=hf_messages,
                 temperature=request.temperature,
@@ -279,11 +295,14 @@ class HuggingFaceConverter:
             )
         )
     
-    async def get_models(self) -> ModelListResponse:
+    async def get_models(self, api_key: str = None) -> ModelListResponse:
         """获取可用模型列表"""
         try:
+            # 使用动态API Key获取客户端
+            client = self.get_client(api_key)
+            
             # 调用Hugging Face API获取模型列表
-            models_response = self.client.models.list()
+            models_response = client.models.list()
             
             models = []
             for model in models_response.data:
