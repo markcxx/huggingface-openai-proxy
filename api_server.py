@@ -103,6 +103,13 @@ async def health_check():
 @app.post("/v1/chat/completions")
 async def create_chat_completion(request: ChatCompletionRequest):
     """创建聊天完成"""
+    global converter
+    
+    # 确保converter已初始化（Vercel环境fallback）
+    if converter is None:
+        logger.warning("Converter not initialized, initializing now...")
+        converter = HuggingFaceConverter()
+    
     try:
         logger.info(f"Chat completion request - Model: {request.model}, Stream: {request.stream}")
         
@@ -144,6 +151,13 @@ async def create_chat_completion(request: ChatCompletionRequest):
 @app.get("/v1/models", response_model=ModelListResponse)
 async def list_models():
     """获取可用模型列表"""
+    global converter
+    
+    # 确保converter已初始化（Vercel环境fallback）
+    if converter is None:
+        logger.warning("Converter not initialized, initializing now...")
+        converter = HuggingFaceConverter()
+    
     try:
         logger.info("Models list request")
         models = await converter.get_models()
