@@ -26,10 +26,19 @@ class HuggingFaceConverter:
     """Hugging Face API转换器"""
     
     def __init__(self):
-        self.client = OpenAI(
-            base_url=config.hf_base_url,
-            api_key=config.hf_token,
-        )
+        self._client = None
+    
+    @property
+    def client(self):
+        """懒加载OpenAI客户端"""
+        if self._client is None:
+            # 如果没有配置HF_TOKEN，使用默认值，让客户端自行配置
+            api_key = config.hf_token or "dummy-key"
+            self._client = OpenAI(
+                base_url=config.hf_base_url,
+                api_key=api_key,
+            )
+        return self._client
     
     def convert_messages_to_hf_format(self, messages: List[Message]) -> List[Dict[str, str]]:
         """将OpenAI消息格式转换为Hugging Face格式"""

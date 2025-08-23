@@ -62,21 +62,22 @@ app.add_middleware(
 )
 
 
-@app.middleware("http")
-async def log_requests(request: Request, call_next):
-    """请求日志中间件"""
-    start_time = time.time()
-    
-    # 记录请求
-    logger.info(f"{request.method} {request.url.path} - Client: {request.client.host}")
-    
-    response = await call_next(request)
-    
-    # 记录响应时间
-    process_time = time.time() - start_time
-    logger.info(f"Request completed in {process_time:.2f}s - Status: {response.status_code}")
-    
-    return response
+# 注释掉可能导致Vercel部署问题的中间件
+# @app.middleware("http")
+# async def log_requests(request: Request, call_next):
+#     """请求日志中间件"""
+#     start_time = time.time()
+#     
+#     # 记录请求
+#     logger.info(f"{request.method} {request.url.path} - Client: {request.client.host}")
+#     
+#     response = await call_next(request)
+#     
+#     # 记录响应时间
+#     process_time = time.time() - start_time
+#     logger.info(f"Request completed in {process_time:.2f}s - Status: {response.status_code}")
+#     
+#     return response
 
 
 @app.get("/")
