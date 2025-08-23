@@ -151,86 +151,93 @@ class HuggingFaceConverter:
             accumulated_content = ""
             in_thinking = False
             thinking_buffer = ""
+            thinking_sent = False
             
             # 发送流式响应
             for chunk in stream:
-                if chunk.choices and chunk.choices[0].delta.content:
+                # 检查是否有内容 - 添加None值检查
+                if chunk.choices and chunk.choices[0].delta.content is not None:
                     content = chunk.choices[0].delta.content
                     accumulated_content += content
                     
-                    # DeepSeek模型的thinking处理：没有开始标签，直接收集到</think>
-                    # 如果还没有遇到</think>，默认认为是thinking内容
-                    if not in_thinking and '</think>' not in accumulated_content:
-                        # 开始时默认为thinking模式
-                        in_thinking = True
-                        thinking_buffer += content
-                        continue
+                    # 检测是否包含thinking模式的模型（如DeepSeek）
+                    is_thinking_model = 'deepseek' in request.model.lower() or 'think' in request.model.lower()
                     
-                    if '</think>' in content and in_thinking:
-                        # thinking结束
-                        think_end_parts = content.split('</think>', 1)
-                        thinking_buffer += think_end_parts[0]
+                    if is_thinking_model:
+                        # DeepSeek模型的thinking处理：检测</think>标签
+                        if '</think>' in content:
+                            # thinking结束
+                            think_end_parts = content.split('</think>', 1)
+                            thinking_buffer += think_end_parts[0]
+                            
+                            # 发送thinking内容（如果有且未发送过）
+                            if thinking_buffer.strip() and not thinking_sent:
+                                stream_response = ChatCompletionStreamResponse(
+                                    id=response_id,
+                                    created=created,
+                                    model=request.model,
+                                    choices=[
+                                        StreamChoice(
+                                            index=0,
+                                            delta=Delta(reasoning=thinking_buffer.strip()),
+                                            finish_reason=None
+                                        )
+                                    ]
+                                )
+                                yield f"data: {stream_response.model_dump_json()}\n\n"
+                                thinking_sent = True
+                            
+                            # 重置thinking状态
+                            in_thinking = False
+                            thinking_buffer = ""
+                            
+                            # 发送thinking之后的内容
+                            after_think = think_end_parts[1] if len(think_end_parts) > 1 else ""
+                            if after_think.strip():
+                                stream_response = ChatCompletionStreamResponse(
+                                    id=response_id,
+                                    created=created,
+                                    model=request.model,
+                                    choices=[
+                                        StreamChoice(
+                                            index=0,
+                                            delta=Delta(content=after_think),
+                                            finish_reason=None
+                                        )
+                                    ]
+                                )
+                                yield f"data: {stream_response.model_dump_json()}\n\n"
+                            continue
                         
-                        # 发送thinking内容
-                        if thinking_buffer.strip():
-                            stream_response = ChatCompletionStreamResponse(
-                                id=response_id,
-                                created=created,
-                                model=request.model,
-                                choices=[
-                                    StreamChoice(
-                                        index=0,
-                                        delta=Delta(reasoning=thinking_buffer.strip()),
-                                        finish_reason=None
-                                    )
-                                ]
-                            )
-                            yield f"data: {stream_response.model_dump_json()}\n\n"
+                        # 如果还没遇到</think>且没有发送过thinking，认为是thinking内容
+                        if not thinking_sent and '</think>' not in accumulated_content:
+                            in_thinking = True
+                            thinking_buffer += content
+                            continue
                         
-                        # 重置thinking状态
-                        in_thinking = False
-                        thinking_buffer = ""
-                        
-                        # 发送thinking之后的内容
-                        after_think = think_end_parts[1] if len(think_end_parts) > 1 else ""
-                        if after_think:
-                            stream_response = ChatCompletionStreamResponse(
-                                id=response_id,
-                                created=created,
-                                model=request.model,
-                                choices=[
-                                    StreamChoice(
-                                        index=0,
-                                        delta=Delta(content=after_think),
-                                        finish_reason=chunk.choices[0].finish_reason
-                                    )
-                                ]
-                            )
-                            yield f"data: {stream_response.model_dump_json()}\n\n"
-                        continue
-                    
-                    if in_thinking:
                         # 在thinking模式中，累积thinking内容
-                        thinking_buffer += content
-                        continue
+                        if in_thinking:
+                            thinking_buffer += content
+                            continue
                     
-                    # 正常内容，直接发送
-                    stream_response = ChatCompletionStreamResponse(
-                        id=response_id,
-                        created=created,
-                        model=request.model,
-                        choices=[
-                            StreamChoice(
-                                index=0,
-                                delta=Delta(content=content),
-                                finish_reason=chunk.choices[0].finish_reason
-                            )
-                        ]
-                    )
-                    yield f"data: {stream_response.model_dump_json()}\n\n"
+                    # 正常内容，直接发送（非thinking模型或thinking已结束）
+                    if content.strip():  # 只发送非空内容
+                        stream_response = ChatCompletionStreamResponse(
+                            id=response_id,
+                            created=created,
+                            model=request.model,
+                            choices=[
+                                StreamChoice(
+                                    index=0,
+                                    delta=Delta(content=content),
+                                    finish_reason=None
+                                )
+                            ]
+                        )
+                        yield f"data: {stream_response.model_dump_json()}\n\n"
                 
-                # 检查是否结束
-                if chunk.choices and chunk.choices[0].finish_reason:
+                # 检查是否结束 - 改进结束检测逻辑
+                if chunk.choices and chunk.choices[0].finish_reason is not None:
                     # 发送结束标记
                     final_response = ChatCompletionStreamResponse(
                         id=response_id,
@@ -247,25 +254,6 @@ class HuggingFaceConverter:
                     yield f"data: {final_response.model_dump_json()}\n\n"
                     break
             
-            # 即使没有收到finish_reason，也强制发送一个finish_reason=stop的响应
-            # 这解决了某些模型不发送finish_reason导致流式响应卡住的问题
-            if not (chunk.choices and chunk.choices[0].finish_reason):
-                logger.info(f"未收到finish_reason，强制发送stop结束标记")
-                final_response = ChatCompletionStreamResponse(
-                    id=response_id,
-                    created=created,
-                    model=request.model,
-                    choices=[
-                        StreamChoice(
-                            index=0,
-                            delta=Delta(),
-                            finish_reason="stop"
-                        )
-                    ]
-                )
-                yield f"data: {final_response.model_dump_json()}\n\n"
-            
-            # 最后发送[DONE]标记
             yield "data: [DONE]\n\n"
             
         except Exception as e:
