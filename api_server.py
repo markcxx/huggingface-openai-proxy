@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from contextlib import asynccontextmanager
 import logging
 import uvicorn
@@ -167,26 +167,32 @@ async def list_models():
 @app.exception_handler(404)
 async def not_found_handler(request: Request, exc):
     """404错误处理"""
-    return {
-        "error": {
-            "message": f"Path {request.url.path} not found",
-            "type": "not_found",
-            "code": "not_found"
+    return JSONResponse(
+        status_code=404,
+        content={
+            "error": {
+                "message": f"Path {request.url.path} not found",
+                "type": "not_found",
+                "code": "not_found"
+            }
         }
-    }
+    )
 
 
 @app.exception_handler(422)
 async def validation_exception_handler(request: Request, exc):
     """请求验证错误处理"""
-    return {
-        "error": {
-            "message": "Invalid request format",
-            "type": "invalid_request_error",
-            "code": "invalid_request_error",
-            "details": str(exc)
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": {
+                "message": "Invalid request format",
+                "type": "invalid_request_error",
+                "code": "invalid_request_error",
+                "details": str(exc)
+            }
         }
-    }
+    )
 
 
 if __name__ == "__main__":
