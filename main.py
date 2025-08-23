@@ -17,9 +17,12 @@ import uvicorn
 from api_server import app
 from src.config import config
 
+# 直接导出app对象供Vercel使用
+# Vercel会直接使用这个app对象，而不是通过uvicorn.run()
+app = app
 
 def main():
-    """主函数 - 启动FastAPI服务器"""
+    """主函数 - 启动FastAPI服务器（仅用于本地开发）"""
     print("🚀 启动 Hugging Face OpenAI API 代理服务...")
     print(f"📍 服务地址: http://{config.host}:{config.port}")
     print(f"📖 API文档: http://{config.host}:{config.port}/docs")
