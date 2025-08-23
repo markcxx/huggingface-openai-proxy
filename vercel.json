@@ -1,5 +1,11 @@
 {
   "version": 2,
+  "builds": [
+    {
+      "src": "api_server.py",
+      "use": "@vercel/python"
+    }
+  ],
   "functions": {
     "api_server.py": {
       "maxDuration": 40
