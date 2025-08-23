@@ -238,7 +238,7 @@ class HuggingFaceConverter:
                 
                 # 检查是否结束 - 改进结束检测逻辑
                 if chunk.choices and chunk.choices[0].finish_reason is not None:
-                    # 发送结束标记
+                    # 发送结束标记 - 确保包含finish_reason的最终chunk
                     final_response = ChatCompletionStreamResponse(
                         id=response_id,
                         created=created,
@@ -252,8 +252,13 @@ class HuggingFaceConverter:
                         ]
                     )
                     yield f"data: {final_response.model_dump_json()}\n\n"
-                    break
+                    # 立即发送[DONE]标记
+                    yield "data: [DONE]\n\n"
+                    return  # 使用return而不是break确保函数完全结束
             
+            # 如果循环正常结束但没有收到finish_reason，也要发送[DONE]
+            # 这种情况可能发生在某些模型或网络问题时
+            logger.warning("Stream ended without finish_reason, sending [DONE] anyway")
             yield "data: [DONE]\n\n"
             
         except Exception as e:
