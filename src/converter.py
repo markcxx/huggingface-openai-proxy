@@ -247,20 +247,25 @@ class HuggingFaceConverter:
                     yield f"data: {final_response.model_dump_json()}\n\n"
                     break
             
-            # 确保在流结束时发送finish_reason="stop"
-            final_response = ChatCompletionStreamResponse(
-                id=response_id,
-                created=created,
-                model=request.model,
-                choices=[
-                    StreamChoice(
-                        index=0,
-                        delta=Delta(),
-                        finish_reason="stop"
-                    )
-                ]
-            )
-            yield f"data: {final_response.model_dump_json()}\n\n"
+            # 即使没有收到finish_reason，也强制发送一个finish_reason=stop的响应
+            # 这解决了某些模型不发送finish_reason导致流式响应卡住的问题
+            if not (chunk.choices and chunk.choices[0].finish_reason):
+                logger.info(f"未收到finish_reason，强制发送stop结束标记")
+                final_response = ChatCompletionStreamResponse(
+                    id=response_id,
+                    created=created,
+                    model=request.model,
+                    choices=[
+                        StreamChoice(
+                            index=0,
+                            delta=Delta(),
+                            finish_reason="stop"
+                        )
+                    ]
+                )
+                yield f"data: {final_response.model_dump_json()}\n\n"
+            
+            # 最后发送[DONE]标记
             yield "data: [DONE]\n\n"
             
         except Exception as e:
