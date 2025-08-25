@@ -129,16 +129,23 @@ async def create_chat_completion(request: ChatCompletionRequest, http_request: R
         if request.stream:
             # 流式响应
             async def generate():
-                async for chunk in converter.create_chat_completion_stream(request, client_api_key):
-                    yield chunk
+                try:
+                    async for chunk in converter.create_chat_completion_stream(request, client_api_key):
+                        yield chunk
+                except Exception as e:
+                    logger.error(f"Error in streaming response generator: {str(e)}")
+                    # 确保在异常情况下也发送结束标记
+                    yield f"data: {{\"error\": \"{str(e)}\"}}\n\n"
+                    yield "data: [DONE]\n\n"
             
             return StreamingResponse(
                 generate(),
-                media_type="text/plain",
+                media_type="text/event-stream",
                 headers={
                     "Cache-Control": "no-cache",
-                    "Connection": "keep-alive",
-                    "Content-Type": "text/event-stream"
+                    "Connection": "close",  # 明确指示连接应该关闭
+                    "Content-Type": "text/event-stream",
+                    "X-Accel-Buffering": "no"  # 禁用代理缓冲
                 }
             )
         else:
