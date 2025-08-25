@@ -189,10 +189,10 @@ class HuggingFaceConverter:
                         ]
                     )
                     yield f"data: {final_response.model_dump_json()}\n\n"
-                    # 立即发送[DONE]标记并强制刷新
+                    # 立即发送[DONE]标记
                     yield "data: [DONE]\n\n"
-                    # 在Vercel环境下确保流正确结束
-                    break
+                    # 确保流正确结束
+                    return
             
             # 如果循环正常结束但没有收到finish_reason，也要发送[DONE]
             # 这种情况可能发生在某些模型或网络问题时

@@ -138,7 +138,9 @@ async def create_chat_completion(request: ChatCompletionRequest, http_request: R
                 headers={
                     "Cache-Control": "no-cache",
                     "Connection": "keep-alive",
-                    "X-Content-Type-Options": "nosniff"
+                    "X-Content-Type-Options": "nosniff",
+                    "Transfer-Encoding": "chunked",
+                    "X-Accel-Buffering": "no"
                 }
             )
         else:
