@@ -126,17 +126,12 @@ class HuggingFaceConverter:
         api_key: str = None
     ) -> AsyncGenerator[str, None]:
         """创建流式聊天完成"""
-        import asyncio
-        
         try:
             # 转换消息格式
             hf_messages = self.convert_messages_to_hf_format(request.messages)
             
             # 使用动态API Key获取客户端
             client = self.get_client(api_key)
-            
-            # 设置超时保护
-            timeout_seconds = min(50, request.max_tokens or 50)  # 根据token数量设置合理的超时时间，但不超过50秒
             
             # 调用Hugging Face API（流式）
             stream = client.chat.completions.create(
@@ -146,8 +141,7 @@ class HuggingFaceConverter:
                 top_p=request.top_p,
                 max_tokens=request.max_tokens,
                 stop=request.stop,
-                stream=True,
-                timeout=timeout_seconds  # 添加请求超时
+                stream=True
             )
             
             response_id = self.generate_response_id()
@@ -157,73 +151,52 @@ class HuggingFaceConverter:
             accumulated_content = ""
             
             # 发送流式响应
-            try:
-                for chunk in stream:
-                    # 检查是否有内容 - 添加None值检查
-                    if chunk.choices and chunk.choices[0].delta.content is not None:
-                        content = chunk.choices[0].delta.content
-                        accumulated_content += content
-                        
-                        # 直接透传原始内容，不做任何特殊处理
-                        # 这确保了与官方API完全一致的输出格式
-                        stream_response = ChatCompletionStreamResponse(
-                            id=response_id,
-                            created=created,
-                            model=request.model,
-                            choices=[
-                                StreamChoice(
-                                    index=0,
-                                    delta=Delta(content=content),
-                                    finish_reason=None
-                                )
-                            ]
-                        )
-                        yield f"data: {stream_response.model_dump_json()}\n\n"
+            for chunk in stream:
+                # 检查是否有内容 - 添加None值检查
+                if chunk.choices and chunk.choices[0].delta.content is not None:
+                    content = chunk.choices[0].delta.content
+                    accumulated_content += content
                     
-                    # 检查是否结束 - 改进结束检测逻辑
-                    if chunk.choices and chunk.choices[0].finish_reason is not None:
-                        # 发送结束标记 - 确保包含finish_reason的最终chunk
-                        final_response = ChatCompletionStreamResponse(
-                            id=response_id,
-                            created=created,
-                            model=request.model,
-                            choices=[
-                                StreamChoice(
-                                    index=0,
-                                    delta=Delta(),
-                                    finish_reason=chunk.choices[0].finish_reason
-                                )
-                            ]
-                        )
-                        yield f"data: {final_response.model_dump_json()}\n\n"
-                        # 立即发送[DONE]标记
-                        yield "data: [DONE]\n\n"
-                        logger.info("Stream completed with finish_reason, sent [DONE]")
-                        return  # 使用return而不是break确保函数完全结束
+                    # 直接透传原始内容，不做任何特殊处理
+                    # 这确保了与官方API完全一致的输出格式
+                    stream_response = ChatCompletionStreamResponse(
+                        id=response_id,
+                        created=created,
+                        model=request.model,
+                        choices=[
+                            StreamChoice(
+                                index=0,
+                                delta=Delta(content=content),
+                                finish_reason=None
+                            )
+                        ]
+                    )
+                    yield f"data: {stream_response.model_dump_json()}\n\n"
                 
-                # 如果循环正常结束但没有收到finish_reason，也要发送[DONE]
-                # 这种情况可能发生在某些模型或网络问题时
-                logger.warning("Stream ended without finish_reason, sending [DONE] anyway")
-                yield "data: [DONE]\n\n"
-                
-            except Exception as e:
-                # 捕获任何异常，确保流式响应正确结束
-                logger.error(f"Error in streaming response: {str(e)}")
-                error_response = ChatCompletionStreamResponse(
-                    id=response_id,
-                    created=created,
-                    model=request.model,
-                    choices=[
-                        StreamChoice(
-                            index=0,
-                            delta=Delta(content=f"\n\nError: {str(e)}"),
-                            finish_reason="stop"
-                        )
-                    ]
-                )
-                yield f"data: {error_response.model_dump_json()}\n\n"
-                yield "data: [DONE]\n\n"
-                return
+                # 检查是否结束 - 改进结束检测逻辑
+                if chunk.choices and chunk.choices[0].finish_reason is not None:
+                    # 发送结束标记 - 确保包含finish_reason的最终chunk
+                    final_response = ChatCompletionStreamResponse(
+                        id=response_id,
+                        created=created,
+                        model=request.model,
+                        choices=[
+                            StreamChoice(
+                                index=0,
+                                delta=Delta(),
+                                finish_reason=chunk.choices[0].finish_reason
+                            )
+                        ]
+                    )
+                    yield f"data: {final_response.model_dump_json()}\n\n"
+                    # 立即发送[DONE]标记
+                    yield "data: [DONE]\n\n"
+                    return  # 使用return而不是break确保函数完全结束
+            
+            # 如果循环正常结束但没有收到finish_reason，也要发送[DONE]
+            # 这种情况可能发生在某些模型或网络问题时
+            logger.warning("Stream ended without finish_reason, sending [DONE] anyway")
+            yield "data: [DONE]\n\n"
             
         except Exception as e:
             logger.error(f"Error in create_chat_completion_stream: {str(e)}")

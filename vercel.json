@@ -3,23 +3,13 @@
   "functions": {
     "api/index.py": {
       "memory": 1024,
-      "maxDuration": 60,
-      "runtime": "python3"
+      "maxDuration": 30
     }
   },
   "routes": [
     {
       "src": "/(.*)",
       "dest": "api/index.py"
-    }
-  ],
-  "headers": [
-    {
-      "source": "/(.*)",
-      "headers": [
-        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
-        { "key": "X-Content-Type-Options", "value": "nosniff" }
-      ]
     }
   ]
 }
