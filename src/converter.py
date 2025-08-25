@@ -120,11 +120,11 @@ class HuggingFaceConverter:
             logger.error(f"Error in create_chat_completion: {str(e)}")
             raise
     
-    async def create_chat_completion_stream(
+    def create_chat_completion_stream(
         self, 
         request: ChatCompletionRequest,
         api_key: str = None
-    ) -> AsyncGenerator[str, None]:
+    ):
         """创建流式聊天完成"""
         try:
             # 转换消息格式
@@ -209,6 +209,8 @@ class HuggingFaceConverter:
                 }
             }
             yield f"data: {json.dumps(error_response)}\n\n"
+            # 确保在异常情况下也发送[DONE]标记
+            yield "data: [DONE]\n\n"
     
     def _convert_hf_response_to_openai(self, hf_response, model: str, request: ChatCompletionRequest) -> ChatCompletionResponse:
         """将Hugging Face响应转换为OpenAI格式"""
