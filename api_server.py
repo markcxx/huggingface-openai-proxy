@@ -127,20 +127,18 @@ async def create_chat_completion(request: ChatCompletionRequest, http_request: R
         logger.info(f"Chat completion request - Model: {request.model}, Stream: {request.stream}")
         
         if request.stream:
-            # 流式响应 - 使用同步生成器以避免Vercel环境下的问题
-            def generate():
-                for chunk in converter.create_chat_completion_stream(request, client_api_key):
+            # 流式响应
+            async def generate():
+                async for chunk in converter.create_chat_completion_stream(request, client_api_key):
                     yield chunk
             
             return StreamingResponse(
                 generate(),
-                media_type="text/event-stream",
+                media_type="text/plain",
                 headers={
                     "Cache-Control": "no-cache",
                     "Connection": "keep-alive",
-                    "X-Content-Type-Options": "nosniff",
-                    "Transfer-Encoding": "chunked",
-                    "X-Accel-Buffering": "no"
+                    "Content-Type": "text/event-stream"
                 }
             )
         else:

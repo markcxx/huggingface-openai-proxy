@@ -120,11 +120,11 @@ class HuggingFaceConverter:
             logger.error(f"Error in create_chat_completion: {str(e)}")
             raise
     
-    def create_chat_completion_stream(
+    async def create_chat_completion_stream(
         self, 
         request: ChatCompletionRequest,
         api_key: str = None
-    ):
+    ) -> AsyncGenerator[str, None]:
         """创建流式聊天完成"""
         try:
             # 转换消息格式
@@ -191,8 +191,7 @@ class HuggingFaceConverter:
                     yield f"data: {final_response.model_dump_json()}\n\n"
                     # 立即发送[DONE]标记
                     yield "data: [DONE]\n\n"
-                    # 确保流正确结束
-                    return
+                    return  # 使用return而不是break确保函数完全结束
             
             # 如果循环正常结束但没有收到finish_reason，也要发送[DONE]
             # 这种情况可能发生在某些模型或网络问题时
@@ -210,8 +209,6 @@ class HuggingFaceConverter:
                 }
             }
             yield f"data: {json.dumps(error_response)}\n\n"
-            # 确保在异常情况下也发送[DONE]标记
-            yield "data: [DONE]\n\n"
     
     def _convert_hf_response_to_openai(self, hf_response, model: str, request: ChatCompletionRequest) -> ChatCompletionResponse:
         """将Hugging Face响应转换为OpenAI格式"""
