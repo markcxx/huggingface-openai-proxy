@@ -13,7 +13,10 @@ from .models import (
     Usage,
     Message,
     Model,
-    ModelListResponse
+    ModelListResponse,
+    TextContent,
+    ImageContent,
+    ContentType
 )
 from .config import config
 import json
@@ -48,14 +51,39 @@ class HuggingFaceConverter:
             api_key=effective_api_key,
         )
     
-    def convert_messages_to_hf_format(self, messages: List[Message]) -> List[Dict[str, str]]:
+    def convert_messages_to_hf_format(self, messages: List[Message]) -> List[Dict[str, Any]]:
         """将OpenAI消息格式转换为Hugging Face格式"""
         hf_messages = []
         for msg in messages:
-            hf_messages.append({
-                "role": msg.role.value,
-                "content": msg.content
-            })
+            # 处理多模态内容
+            if isinstance(msg.content, str):
+                # 纯文本消息
+                hf_messages.append({
+                    "role": msg.role.value,
+                    "content": msg.content
+                })
+            elif isinstance(msg.content, list):
+                # 多模态消息
+                content_parts = []
+                for part in msg.content:
+                    if isinstance(part, TextContent):
+                        content_parts.append({
+                            "type": "text",
+                            "text": part.text
+                        })
+                    elif isinstance(part, ImageContent):
+                        content_parts.append({
+                            "type": "image_url",
+                            "image_url": {
+                                "url": part.image_url.url,
+                                "detail": part.image_url.detail
+                            }
+                        })
+                
+                hf_messages.append({
+                    "role": msg.role.value,
+                    "content": content_parts
+                })
         return hf_messages
     
     def generate_response_id(self) -> str:
@@ -66,12 +94,34 @@ class HuggingFaceConverter:
         """获取当前时间戳"""
         return int(time.time())
     
-    def estimate_tokens(self, text: str) -> int:
+    def estimate_tokens(self, content) -> int:
         """估算token数量（简单实现）"""
-        if text is None:
+        if content is None:
             return 0
-        # 简单的token估算，实际应该使用tokenizer
-        return len(text.split()) + len(text) // 4
+        
+        # 处理字符串类型
+        if isinstance(content, str):
+            return len(content.split()) + len(content) // 4
+        
+        # 处理多模态内容列表
+        elif isinstance(content, list):
+            total_tokens = 0
+            for part in content:
+                if isinstance(part, dict):
+                    if part.get('type') == 'text':
+                        text = part.get('text', '')
+                        total_tokens += len(text.split()) + len(text) // 4
+                    elif part.get('type') == 'image_url':
+                        # 图片估算为固定token数量
+                        total_tokens += 85  # OpenAI的图片大约85个token
+                elif hasattr(part, 'text'):  # TextContent对象
+                    total_tokens += len(part.text.split()) + len(part.text) // 4
+                elif hasattr(part, 'image_url'):  # ImageContent对象
+                    total_tokens += 85
+            return total_tokens
+        
+        # 其他类型返回0
+        return 0
     
     def parse_thinking_content(self, content: str) -> tuple[str, str]:
         """解析thinking内容，分离思考过程和最终回答"""

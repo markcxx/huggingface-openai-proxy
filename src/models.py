@@ -11,10 +11,32 @@ class Role(str, Enum):
     FUNCTION = "function"
 
 
+class ImageUrl(BaseModel):
+    """图片URL模型"""
+    url: str
+    detail: Optional[str] = "auto"  # "auto", "low", "high"
+
+
+class TextContent(BaseModel):
+    """文本内容模型"""
+    type: str = "text"
+    text: str
+
+
+class ImageContent(BaseModel):
+    """图片内容模型"""
+    type: str = "image_url"
+    image_url: ImageUrl
+
+
+# 内容类型联合
+ContentType = Union[TextContent, ImageContent]
+
+
 class Message(BaseModel):
     """聊天消息模型"""
     role: Role
-    content: str
+    content: Union[str, List[ContentType]]  # 支持字符串或多模态内容列表
     name: Optional[str] = None
     reasoning: Optional[str] = None  # 用于存储thinking内容
 
